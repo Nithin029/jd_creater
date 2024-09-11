@@ -316,7 +316,7 @@ def insert_job_data(company_name, job_title, description, requirements, location
             department TEXT,
             work VARCHAR(511),
             additonal TEXT,
-            jobtype VARCHAR(255)
+            jobtype VARCHAR(255),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """

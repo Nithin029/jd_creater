@@ -78,7 +78,8 @@ vector_indices = {
     ),
 }
 
-
+def set_default_value(value, default="None"):
+    return default if value is None or value.strip() == "" else value
 def response(message: object, model: object = "llama3-8b-8192", SysPrompt: object = SysPromptDefault,
              temperature: object = 0.2) -> object:
     """
@@ -296,7 +297,7 @@ def get_salary_ranges_for_company(company_name):
         return [record['salary_range'] for record in result]
 
 
-def insert_job_data(company_name, job_title, description, requirements, location, salary):
+def insert_job_data(company_name, job_title, description, requirements, location, salary,department,working_days,additional_benefits,job_type):
     conn = None
     cur = None
     try:
@@ -312,20 +313,26 @@ def insert_job_data(company_name, job_title, description, requirements, location
             requirements TEXT,
             location VARCHAR(255),
             salary VARCHAR(255),
+            department TEXT,
+            work VARCHAR(511),
+            additonal TEXT,
+            jobtype VARCHAR(255)
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """
         cur.execute(create_table_query)
 
-        # Handle null requirements
-        if requirements is None or requirements.strip() == "":
-            requirements = "None"
+        requirements = set_default_value(requirements)
+        department = set_default_value(department)
+        working_days = set_default_value(working_days)
+        additional_benefits = set_default_value(additional_benefits)
+
 
         insert_query = """
-        INSERT INTO job_listings (company_name, job_title, description, requirements, location, salary)
-        VALUES (%s, %s, %s, %s, %s, %s);
+        INSERT INTO job_listings (company_name, job_title, description, requirements, location, salary,department,work,additional,jobtype)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
-        cur.execute(insert_query, (company_name, job_title, description, requirements, location, salary))
+        cur.execute(insert_query, (company_name, job_title, description, requirements, location, salary,department,working_days,additional_benefits,job_type))
         conn.commit()
         return True
     except (Exception, psycopg2.Error) as error:
@@ -411,7 +418,7 @@ def handle_existing_title(company_name, job_title):
         if st.button("Update Job Listing"):
             requirements_to_insert = new_requirements if new_requirements.strip() else "None"
             if insert_job_data(company_name, job_title, updated_description, requirements_to_insert,
-                               selected_location, selected_salary):
+                               selected_location, selected_salary,selected_department,working_days,additional_benefits,selected_jobtype):
                 st.success(
                     f"Job listing updated successfully! Requirements: {'Provided' if new_requirements.strip() else 'None'}")
             else:
@@ -571,7 +578,7 @@ def handle_new_title(company_name, new_title):
         if st.button("Create New Job Listing"):
             requirements_to_insert = new_requirements if new_requirements.strip() else "None"
             if insert_job_data(company_name, new_title, updated_description, requirements_to_insert,
-                               selected_location, selected_salary):
+                               selected_location, selected_salary,selected_department,working_days,additional_benefits,selected_jobtype):
                 st.success(
                     f"New job listing created for {new_title}! Requirements: {'Provided' if new_requirements.strip() else 'None'}")
             else:

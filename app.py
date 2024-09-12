@@ -19,6 +19,8 @@ password = os.getenv("password")
 user_name = os.getenv("user_name")
 password_sql=os.getenv("password_sql")
 host = os.getenv("host_name")
+user=os.getenv("user")
+password_postgres=os.getenv("password_postgres")
 client = OpenAI(
     base_url="https://api.together.xyz/v1",
     api_key=TOGETHER_API_KEY
@@ -150,12 +152,13 @@ def get_combined_description(company_name, job_title):
 
 # PostgreSQL connection function
 
-def get_mysql_connection():
-    return mysql.connector.connect(
-        database="medichire_dev",
-        user=user_name,
-        password=password_sql,
-        host=host,
+def get_postgres_connection():
+    return psycopg2.connect(
+        dbname="postgres",
+        user=user,
+        password=password_postgres,
+        host="aws-0-us-east-1.pooler.supabase.com",
+        port="6543"
     )
 
     # Authentication function
@@ -164,9 +167,19 @@ def register_company(company_name, password):
         # Hash the password
         hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-        # Connect to MySQL
-        conn = get_mysql_connection()
+        # Connect to PostgreSQL
+        conn = get_postgres_connection()
         cur = conn.cursor()
+
+        # Create table if it doesn't exist
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS companies (
+            company_name VARCHAR(255) PRIMARY KEY,
+            password VARCHAR(255) NOT NULL
+        );
+        """
+        cur.execute(create_table_query)
+        conn.commit()
 
         # Insert the new company and password
         insert_query = """
@@ -180,7 +193,7 @@ def register_company(company_name, password):
         conn.close()
 
         return True
-    except mysql.connector.IntegrityError:
+    except psycopg2.IntegrityError:
         conn.rollback()  # In case of a duplicate entry
         return False
     except Exception as e:
@@ -189,8 +202,8 @@ def register_company(company_name, password):
 
 def authenticate(company_name, password):
     try:
-        # Connect to MySQL
-        conn = get_mysql_connection()
+        # Connect to PostgreSQL
+        conn = get_postgres_connection()
         cur = conn.cursor()
 
         # Fetch the password from the database for the given company
@@ -288,31 +301,46 @@ def get_salary_ranges_for_company(company_name):
         return [record['salary_range'] for record in result]
 
 
-def insert_job_data(company_name, job_title, description, requirements, location, salary, department, working_days, additional_benefits, job_type):
+def insert_job_data(company_name, job_title, description, requirements, location, salary,department,working_days,additional_benefits,job_type):
     conn = None
     cur = None
     try:
-        # Connect to MySQL
-        conn = get_mysql_connection()
+        conn = get_postgres_connection()
         cur = conn.cursor()
 
-        # Handle default values
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS job_listings (
+            id SERIAL PRIMARY KEY,
+            company_name VARCHAR(255),
+            job_title VARCHAR(255),
+            description TEXT,
+            requirements TEXT,
+            location VARCHAR(255),
+            salary VARCHAR(255),
+            department TEXT,
+            work VARCHAR(511),
+            additional TEXT,
+            jobtype VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        cur.execute(create_table_query)
+
         requirements = set_default_value(requirements)
         department = set_default_value(department)
         working_days = set_default_value(working_days)
         additional_benefits = set_default_value(additional_benefits)
 
-        # Insert job data
+
         insert_query = """
-        INSERT INTO job_listings (company_name, job_title, description, requirements, location, salary, department, work, additional, jobtype)
+        INSERT INTO job_listings (company_name, job_title, description, requirements, location, salary,department,work,additional,jobtype)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
-        cur.execute(insert_query, (company_name, job_title, description, requirements, location, salary, department, working_days, additional_benefits, job_type))
+        cur.execute(insert_query, (company_name, job_title, description, requirements, location, salary,department,working_days,additional_benefits,job_type))
         conn.commit()
-
         return True
-    except (Exception, mysql.connector.Error) as error:
-        print("Error while connecting to MySQL", error)
+    except (Exception, psycopg2.Error) as error:
+        print("Error while connecting to PostgreSQL", error)
         return False
     finally:
         if cur:

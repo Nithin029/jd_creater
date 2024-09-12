@@ -289,6 +289,15 @@ def get_locations_for_company(company_name):
         result = session.run(query, company_name=company_name)
         return [record['location'] for record in result]
 
+def filter_locations(locations):
+    filtered_locations = []
+    for location in locations:
+        parts = location.split(', ')
+        if len(parts) == 3:
+            city = parts[0]
+            state = parts[2]
+            filtered_locations.append(f"{city}, {state}")
+    return filtered_locations
 
 def get_salary_ranges_for_company(company_name):
     with get_neo4j_driver().session() as session:
@@ -301,7 +310,7 @@ def get_salary_ranges_for_company(company_name):
         return [record['salary_range'] for record in result]
 
 
-def insert_job_data(company_name, job_title, description, requirements, location, salary,department,working_days,additional_benefits,job_type):
+def insert_job_data(company_name, job_title,alternative_company_description,old_description, generated_description, requirements, location, salary,department,working_days,additional_benefits,job_type):
     conn = None
     cur = None
     try:
@@ -313,7 +322,9 @@ def insert_job_data(company_name, job_title, description, requirements, location
             id SERIAL PRIMARY KEY,
             company_name VARCHAR(255),
             job_title VARCHAR(255),
-            description TEXT,
+            alternative_company_description TEXT,
+            old_description TEXT,
+            generated_description TEXT,
             requirements TEXT,
             location VARCHAR(255),
             salary VARCHAR(255),
@@ -333,10 +344,10 @@ def insert_job_data(company_name, job_title, description, requirements, location
 
 
         insert_query = """
-        INSERT INTO job_listings (company_name, job_title, description, requirements, location, salary,department,work,additional,jobtype)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        INSERT INTO job_listings (company_name, job_title, alternative_company_description,old_description, generated_description, requirements, location, salary,department,work,additional,jobtype)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,%s,%s);
         """
-        cur.execute(insert_query, (company_name, job_title, description, requirements, location, salary,department,working_days,additional_benefits,job_type))
+        cur.execute(insert_query, (company_name, job_title, alternative_company_description,old_description, generated_description, requirements, location, salary,department,working_days,additional_benefits,job_type))
         conn.commit()
         return True
     except (Exception, psycopg2.Error) as error:
@@ -353,12 +364,13 @@ def insert_job_data(company_name, job_title, description, requirements, location
 # Updated function to handle existing job titles
 def handle_existing_title(company_name, job_title):
     old_description = get_job_description(company_name, job_title)
-
+    alternative_company_description = None
     locations = get_locations_for_company(company_name)
+    filtered_locations = filter_locations(locations)
     salaries = get_salary_ranges_for_company(company_name)
     jobtypes=get_job_type()
 
-    selected_location = st.selectbox("Select a location", locations + ["Enter new location"])
+    selected_location = st.selectbox("Select a location", filtered_locations + ["Enter new location"])
     if selected_location == "Enter new location":
         selected_location = st.text_input("Enter new location (county, city, state)")
 
@@ -421,7 +433,7 @@ def handle_existing_title(company_name, job_title):
 
         if st.button("Update Job Listing"):
             requirements_to_insert = new_requirements if new_requirements.strip() else "None"
-            if insert_job_data(company_name, job_title, updated_description, requirements_to_insert,
+            if insert_job_data(company_name, job_title,alternative_company_description,old_description, updated_description, requirements_to_insert,
                                selected_location, selected_salary,selected_department,working_days,additional_benefits,selected_jobtype):
                 st.success(
                     f"Job listing updated successfully! Requirements: {'Provided' if new_requirements.strip() else 'None'}")
@@ -470,9 +482,10 @@ def handle_new_title(company_name, new_title):
 
     # Rest of the function remains the same
     locations = get_locations_for_company(company_name)
+    filtered_locations = filter_locations(locations)
     salaries = get_salary_ranges_for_company(company_name)
 
-    selected_location = st.selectbox("Select a location", locations + ["Enter new location"])
+    selected_location = st.selectbox("Select a location", filtered_locations + ["Enter new location"])
     if selected_location == "Enter new location":
         selected_location = st.text_input("Enter new location (county, city, state)")
 
@@ -581,7 +594,7 @@ def handle_new_title(company_name, new_title):
 
         if st.button("Create New Job Listing"):
             requirements_to_insert = new_requirements if new_requirements.strip() else "None"
-            if insert_job_data(company_name, new_title, updated_description, requirements_to_insert,
+            if insert_job_data(company_name, new_title,alternative_description,current_company_job_description, updated_description, requirements_to_insert,
                                selected_location, selected_salary,selected_department,working_days,additional_benefits,selected_jobtype):
                 st.success(
                     f"New job listing created for {new_title}! Requirements: {'Provided' if new_requirements.strip() else 'None'}")

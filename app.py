@@ -370,7 +370,7 @@ def handle_existing_title(company_name, job_title):
     working_days = st.text_input("Enter Working Days (optional)")
     additional_benefits = st.text_area("Enter Additional Benefits/Details (optional)")
     selected_jobtype = st.selectbox("Select a jobtype", jobtypes + ["Enter new jobtype"])
-    if selected_jobtype == "Enter new jobtype(optional)":
+    if selected_jobtype == "Enter new jobtype":
         selected_jobtype = st.text_input("Enter new jobtype (jobtype)")
     new_requirements = st.text_area("Enter updated job requirements (optional)")
 

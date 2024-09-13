@@ -33,6 +33,7 @@ with open('prompt.json', 'r') as file:
 
 jd = prompts['jd']
 jd_alternative = prompts['jd_alternative']
+jd_new=prompts['jd_new']
 
 
 vector_indices = {
@@ -440,7 +441,79 @@ def handle_existing_title(company_name, job_title):
             else:
                 st.error("Failed to update job listing.")
 
+def handle_custom_title(company_name, new_title):
+    st.subheader("New Custom Job Title")
+    st.write(f"Creating new job listing for: {new_title}")
 
+    # Get the sample job description for the company
+    current_company_sample_description = get_sample_job_description_from_neo4j(company_name)
+
+    # Get other necessary information
+    locations = get_locations_for_company(company_name)
+    filtered_locations = filter_locations(locations)
+    salaries = get_salary_ranges_for_company(company_name)
+    jobtypes = get_job_type()
+
+    # Input fields
+    selected_location = st.selectbox("Select a location", filtered_locations + ["Enter new location"])
+    if selected_location == "Enter new location":
+        selected_location = st.text_input("Enter new location (county, city, state)")
+
+    selected_salary = st.selectbox("Select a salary range", salaries + ["Enter new salary range"])
+    if selected_salary == "Enter new salary range":
+        selected_salary = st.text_input("Enter new salary range")
+
+    new_requirements = st.text_area("Enter job requirements (optional)")
+    selected_department = st.text_input("Enter Department (optional)")
+    working_days = st.text_input("Enter Working Days (optional)")
+    selected_jobtype = st.selectbox("Select a jobtype", jobtypes + ["Enter new jobtype"])
+    if selected_jobtype == "Enter new jobtype":
+        selected_jobtype = st.text_input("Enter new jobtype")
+    additional_benefits = st.text_area("Enter Additional Benefits/Details (optional)")
+
+    if st.button("Generate Job Description"):
+        message = f"""PREVIOUS_JD:
+        {current_company_sample_description}
+
+        NEW_REQUIREMENTS:
+        {new_requirements}
+
+        JOB_TITLE:
+        {new_title}
+
+        LOCATION:
+        {selected_location}
+
+        SALARY:
+        {selected_salary}
+
+        DEPARTMENT:
+        {selected_department}
+
+        WORKING_DAYS:
+        {working_days}
+
+        ADDITIONAL_BENEFITS:
+        {additional_benefits}
+
+        JOB_TYPE:
+        {selected_jobtype}
+        """
+        model = "llama-3.1-70b-versatile"
+        st.session_state.generated_description = response(message=message, model=model, SysPrompt=jd_new, temperature=0.2)
+
+    if st.session_state.get('generated_description'):
+        st.subheader("Generated Job Description")
+        updated_description = st.text_area("Edit Job Description", st.session_state.generated_description, height=300)
+
+        if st.button("Create New Job Listing"):
+            requirements_to_insert = new_requirements if new_requirements.strip() else "None"
+            if insert_job_data(company_name, new_title, None, current_company_sample_description, updated_description,
+                               requirements_to_insert, selected_location, selected_salary, selected_department,
+                               working_days, additional_benefits, selected_jobtype):
+                st.success(f"New job listing created for {new_title}! Requirements: {'Provided' if new_requirements.strip() else 'None'}")
+            else:
+                st.error("Failed to create new job listing.")
 # Updated function to handle new job titles
 def handle_new_title(company_name, new_title):
     description = None
@@ -461,7 +534,14 @@ def handle_new_title(company_name, new_title):
             unique_titles[title] = doc.metadata.get('description', None)
 
     cleansed_titles = list(unique_titles.keys())
+    cleansed_titles.append("Enter custom title")  # Add option for custom title
     selected_option = st.selectbox("Select a job title or enter a new one", cleansed_titles)
+
+    if selected_option == "Enter custom title":
+        custom_title = st.text_input("Enter your custom job title")
+        if custom_title:
+            handle_custom_title(company_name, custom_title)
+        return  # Exit the function after handling custom title
 
     if selected_option:
         existing_titles = get_job_titles(company_name)
@@ -473,12 +553,12 @@ def handle_new_title(company_name, new_title):
             if alternative_description:
                 st.write("No exact match found for the title. Using combined description.")
                 print(alternative_description)
-                #print(current_company_job_description)
             else:
                 st.write("No exact match found, and no alternative description available.")
     else:
         description = get_sample_job_description_from_neo4j(company_name)
         st.write("No similar titles found, using a sample job description.")
+
 
     # Rest of the function remains the same
     locations = get_locations_for_company(company_name)
@@ -503,7 +583,6 @@ def handle_new_title(company_name, new_title):
 
     if st.button("Generate Job Description"):
         if alternative_description and current_company_job_description is not None:
-            print("yes")
             message = f"""ALTERNATE_COMPANY_DESCRIPTION:
 
             {alternative_description}

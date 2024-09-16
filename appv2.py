@@ -3,7 +3,7 @@ import json
 import bcrypt
 from datetime import datetime
 from functools import lru_cache
-
+import cohere
 import streamlit as st
 from dotenv import load_dotenv
 import psycopg2
@@ -22,6 +22,7 @@ NEO4J_USERNAME = "neo4j"
 NEO4J_PASSWORD = os.getenv("password")
 POSTGRES_USER = os.getenv("user")
 POSTGRES_PASSWORD = os.getenv("password_postgres")
+COHERE_API = os.getenv("COHERE_API")
 
 client = OpenAI(
     base_url="https://api.together.xyz/v1",
@@ -234,12 +235,81 @@ def authenticate(company_name, password):
         st.error(f"Error authenticating company: {e}")
         return False
 
+
+def classify_prompt(prompt, classifier_type):
+    cohere_client = cohere.Client(os.getenv("COHERE_API"))
+
+    examples = {
+        "medical_job_seeking": [
+            # Medical job titles
+            {"text": "Pediatric Nurse", "label": "medical"},
+            {"text": "Radiology Technician", "label": "medical"},
+            {"text": "General Practitioner", "label": "medical"},
+            {"text": "Medical Assistant", "label": "medical"},
+            {"text": "Medical Researcher", "label": "medical"},
+            {"text": "Hospital Administrator", "label": "medical"},
+            {"text": "Cardiologist", "label": "medical"},
+            {"text": "Physical Therapist", "label": "medical"},
+            {"text": "Anesthesiologist", "label": "medical"},
+            {"text": "Emergency Room Nurse", "label": "medical"},
+            {"text": "Orthopedic Surgeon", "label": "medical"},
+            {"text": "Pharmacist", "label": "medical"},
+            {"text": "Oncologist", "label": "medical"},
+            {"text": "Dermatologist", "label": "medical"},
+            {"text": "Pediatrician", "label": "medical"},
+
+            # Non-medical job titles
+            {"text": "Software Engineer", "label": "non-medical"},
+            {"text": "Project Manager", "label": "non-medical"},
+            {"text": "Financial Analyst", "label": "non-medical"},
+            {"text": "Marketing Manager", "label": "non-medical"},
+            {"text": "Customer Service Representative", "label": "non-medical"},
+            {"text": "Sales Associate", "label": "non-medical"},
+            {"text": "Data Scientist", "label": "non-medical"},
+            {"text": "Restaurant Manager", "label": "non-medical"},
+            {"text": "Hotel Front Desk Manager", "label": "non-medical"},
+            {"text": "Graphic Designer", "label": "non-medical"},
+            {"text": "Operations Manager", "label": "non-medical"},
+            {"text": "Accountant", "label": "non-medical"},
+            {"text": "Teacher", "label": "non-medical"},
+            {"text": "Lawyer", "label": "non-medical"},
+            {"text": "HR Coordinator", "label": "non-medical"},
+            {"text": "Plumber", "label": "non-medical"},  # Added blue-collar job
+            {"text": "Gardener", "label": "non-medical"},  # Added blue-collar job
+            {"text": "Electrician", "label": "non-medical"},  # Added blue-collar job
+            {"text": "Carpenter", "label": "non-medical"},  # Added blue-collar job
+            {"text": "Mechanic", "label": "non-medical"},  # Added blue-collar job
+            {"text": "Construction Worker", "label": "non-medical"},  # Added blue-collar job
+            {"text": "Taxi Driver", "label": "non-medical"},  # Added blue-collar job
+            {"text": "Chef", "label": "non-medical"},  # Added service industry job
+            {"text": "Bartender", "label": "non-medical"},  # Added service industry job
+            {"text": "Housekeeper", "label": "non-medical"}  # Added service industry job
+        ]
+    }
+
+    response = cohere_client.classify(
+        model='large',
+        inputs=[prompt],
+        examples=examples[classifier_type]
+    )
+
+    return response.classifications[0].prediction == 'medical'
+
+    # Return whether the classified label is medical
+    return response.classifications[0].prediction == 'medical'
 # Job handling functions
 def handle_existing_title(company_name, job_title):
     old_description = get_job_description(company_name, job_title)
     handle_job_listing(company_name, job_title, old_description)
 
 def handle_new_title(company_name, new_title):
+    if not classify_prompt(new_title, "medical_job_seeking"):
+        st.markdown(
+            "<p style='color:orange; font-weight:bold;'>Please provide a valid medical job title.</p>",
+            unsafe_allow_html=True
+        )
+        return
+
     st.subheader("New Job Title")
     st.write(f"Creating new job listing for: {new_title}")
 
@@ -260,6 +330,12 @@ def handle_new_title(company_name, new_title):
     if selected_option == "Enter custom title":
         custom_title = st.text_input("Enter your custom job title")
         if custom_title:
+            if not classify_prompt(new_title, "medical_job_seeking"):
+                st.markdown(
+                    "<p style='color:orange; font-weight:bold;'>Please provide a valid medical job title.</p>",
+                    unsafe_allow_html=True
+                )
+                return
             handle_custom_title(company_name, custom_title)
         return
 
